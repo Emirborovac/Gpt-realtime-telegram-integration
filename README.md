@@ -1,129 +1,175 @@
-# MultiModal Telegram Bot with GPT-4o Realtime API
+# MultiModal Bot - Detailed Technical Explanation
 
-A sophisticated yet elegantly implemented Telegram bot that leverages OpenAI's GPT-4o Realtime API to provide seamless text, voice, and image interactions. This implementation showcases real-time WebSocket communication and advanced audio processing while maintaining clean, maintainable code.
+## Models & APIs Used
+1. **Real-time Chat & Voice**: `gpt-4o-realtime-preview-2024-12-17`
+   - Used for text and voice interactions
+   - Accessed via WebSocket connection
 
-## Features
+2. **Image Analysis**: `chatgpt-4o-latest`
+   - Used specifically for image processing
+   - Accessed via standard REST API
 
-- **Real-time Text Chat**: Streaming text responses with typing indicators
-- **Voice Interaction**: High-quality audio processing with format optimization
-- **Image Analysis**: Vision capabilities using GPT-4o Vision
-- **WebSocket Management**: Efficient connection handling per chat
-- **Multi-Modal Support**: Seamless switching between text, voice, and image processing
+## Core Components
 
-## Technical Overview
-
-### Core Components
-
-- **WebSocket Handling**: Implements the GPT-4o Realtime API WebSocket protocol
-- **Audio Processing**: 
-  - Input: OGG → PCM16 (16kHz, mono)
-  - Output: PCM16 → WAV → OGG (with optimized parameters)
-- **Connection Management**: Per-chat WebSocket connections with automatic cleanup
-- **Error Handling**: Comprehensive error catching and logging
-
-## Installation
-
-```bash
-# Clone the repository
-git clone [repository-url]
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-## Configuration
-
-1. Set environment variables:
-```bash
-export TELEGRAM_TOKEN="your_telegram_token"
-export OPENAI_API_KEY="your_openai_api_key"
-```
-
-2. Configure logging (optional):
+### 1. Class Structure
 ```python
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+class MultiModalBot:
+    def __init__(self):
+        # Initializes Telegram bot and OpenAI client
+        # Sets up message handlers
 ```
 
-## Architecture
+### 2. Connection Management
+- Global WebSocket connection dictionary: `ws_connections`
+- Per-chat connection management
+- Automatic cleanup on shutdown
 
-### Session Management
-- WebSocket connections maintained per chat
-- Automatic session configuration for voice/text modes
-- Efficient cleanup on shutdown
+### 3. Message Handlers
 
-### Audio Processing Pipeline
-1. **Input Processing**:
-   - Download Telegram voice message
-   - Convert OGG to PCM16 with specific parameters
-   - Handle WAV headers properly
+#### Text Messages (`handle_text`)
+- Creates WebSocket connection
+- Sends text messages
+- Streams responses with typing indicators
+- Updates message in real-time
 
-2. **Output Processing**:
-   - Collect audio chunks
-   - Build WAV with correct headers
-   - Convert to OGG with optimized quality
+#### Voice Messages (`handle_voice`)
+1. **Audio Processing Pipeline**:
+   - Downloads OGG from Telegram
+   - Converts to PCM16 format
+   - Sets correct sample rate (24000Hz)
+   - Manages mono channel and 16-bit depth
 
-### Response Handling
-- Streaming text updates
-- Chunked audio processing
-- Buffer size monitoring
-- Proper error handling
+2. **Chunking System**:
+   - Splits large audio into 1MB chunks
+   - Buffer size monitoring (10MB limit)
+   - Proper audio reconstruction
 
-## Implementation Examples
+3. **Response Processing**:
+   - Collects audio chunks
+   - Builds WAV with correct headers
+   - Converts to OGG for Telegram
+   - Includes text captions
 
-### Initialize Bot
+#### Photo Messages (`handle_photo`)
+- Uses Vision API directly
+- Base64 encodes images
+- Processes with high detail setting
+- Supports optional captions
+
+### 4. WebSocket Session Management
+
+#### Configuration
 ```python
-bot = MultiModalBot()
-bot.run()
+session_config = {
+    "type": "session.update",
+    "session": {
+        "modalities": ["audio", "text"] if is_voice else ["text"],
+        "instructions": "You are a helpful assistant in a Telegram chat."
+    }
+}
 ```
 
-### Handle Voice Messages
+#### Voice-Specific Settings
 ```python
-# Voice messages are automatically processed through:
-# 1. Audio format conversion
-# 2. WebSocket streaming
-# 3. Response collection
-# 4. Audio reconstruction
+{
+    "input_audio_format": "pcm16",
+    "output_audio_format": "pcm16",
+    "voice": "ballad",
+    "turn_detection": None
+}
 ```
 
-## API Integration
+### 5. Error Handling
+- Comprehensive try-except blocks
+- Detailed logging
+- User-friendly error messages
+- Connection cleanup on errors
 
-Utilizes OpenAI's GPT-4o Realtime API endpoints:
-- WebSocket: `wss://api.openai.com/v1/realtime`
-- Model: `gpt-4o-realtime-preview-2024-12-17`
+## Technical Specifications
 
-## Best Practices
+### Audio Processing
+1. **Input Format**:
+   - Source: Telegram OGG
+   - Target: PCM16
+   - Sample Rate: 24kHz
+   - Channels: Mono
+   - Bit Depth: 16-bit
 
-1. **Audio Processing**:
-   - Maintain consistent sample rates
-   - Use proper buffering
-   - Handle format conversions carefully
+2. **Output Format**:
+   - Processing: PCM16 → WAV → OGG
+   - Codec: libopus
+   - Bitrate: 64k
+   - Parameters: 24kHz, mono
 
-2. **Error Handling**:
-   - Comprehensive logging
-   - Graceful fallbacks
-   - Clear user feedback
+### WebSocket Protocol
+1. **Connection**:
+   - URL: `wss://api.openai.com/v1/realtime`
+   - Headers: Authorization & Beta flag
 
-3. **Resource Management**:
-   - Proper WebSocket cleanup
-   - Buffer size limits
-   - Connection pooling
+2. **Message Types**:
+   - conversation.item.create
+   - input_audio_buffer.append
+   - input_audio_buffer.commit
+   - response.create
 
-## Limitations and Considerations
+### Vision API Integration
+```python
+{
+    "type": "image_url",
+    "image_url": {
+        "url": f"data:image/jpeg;base64,{base64_image}",
+        "detail": "high"
+    }
+}
+```
 
-- WebSocket connections require proper cleanup
-- Audio processing is memory-intensive
-- Rate limits apply to API usage
+## Implementation Details
 
-## Contributing
+### Resource Management
+1. **Memory**:
+   - Audio chunk size: 1MB
+   - Maximum buffer: 10MB
+   - Base64 encoding handling
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. **Connections**:
+   - Per-chat WebSocket pools
+   - Automatic cleanup
+   - Error recovery
 
-## License
-MIT
+### Performance Optimizations
+1. **Audio**:
+   - Efficient format conversions
+   - Proper buffer management
+   - Optimized codec parameters
+
+2. **Text**:
+   - Real-time streaming
+   - Efficient update intervals
+   - Message editing optimization
+
+## Usage Examples
+
+### Start Bot
+```python
+if __name__ == '__main__':
+    bot = MultiModalBot()
+    bot.run()
+```
+
+### Send Voice Message
+1. User sends voice message
+2. Bot processes audio
+3. GPT-4o processes and responds
+4. Bot sends voice response with text caption
+
+### Send Image
+1. User sends image with optional caption
+2. Bot processes with Vision API
+3. GPT-4o analyzes image
+4. Bot sends detailed description
+
+## Security Considerations
+- API key management
+- Error message sanitization
+- Resource limits enforcement
+- Connection security
